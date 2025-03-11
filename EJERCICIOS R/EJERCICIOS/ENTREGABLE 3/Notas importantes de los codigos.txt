@@ -1,0 +1,48 @@
+Janitor: Sirve para limpiar los nombres de las columnas y contar los valores faltantes en ella
+
+clean_names(df): Garantiza que los nombres de las columnas sean solo letras, numeros o guiones bajos
+
+sapply(df, function(x) sum(is.na(x)))
+sapply(df, ...): Esta función aplica una función a cada columna del marco de datos df. El resultado se simplifica a un vector o matriz, lo que facilita la visualización de los resultados.
+
+function(x) sum(is.na(x)): Esta es una función anónima que toma cada columna xy cuenta cuántos valores son NA.
+is.na(x): Devuelve un vector lógico que indica si cada elemento de xes NA (TRUE) o no (FALSE).
+
+sum(is.na(x)): Suma los valores TRUE, lo que equivale al número total de NA en la columna.
+
+
+
+dat: El dataframe que deseas dividir.
+
+prop: Un vector que define la proporción de datos para cada conjunto. Por defecto, se establece en 60% para entrenamiento, 20% para validación y 20% para prueba.
+
+Se utiliza sample()para seleccionar aleatoriamente las filas para el conjunto de entrenamiento y luego para el conjunto de validación a partir de los datos restantes.
+
+
+
+  nrw = nrow(dat)  # Obtiene el número total de filas en el dataframe
+
+  trnr = as.integer(nrw * prop[1])  # Calcula el número de filas para el conjunto de entrenamiento
+
+  vlnr = as.integer(nrw * prop[2])  
+# Calcula el número de filas para el conjunto de validación
+  
+  set.seed(123)  # Establece la semilla para la selección aleatoria
+  
+  trni = sample(1:nrow(dat), trnr)  
+# Selecciona índices aleatorios para el conjunto de entrenamiento
+  
+trndata = dat[trni, ]  # Crea el conjunto de entrenamiento
+  
+rmng = dat[-trni, ]  # Obtiene el resto de los datos
+  
+  vlni = sample(1:nrow(rmng), vlnr)  
+# Selecciona índices aleatorios para el conjunto de validación
+  
+valdata = rmng[vlni, ]  # Crea el conjunto de validación
+  
+tstdata = rmng[-vlni, ]  # Crea el conjunto de prueba
+  
+  mylist = list("trn" = trndata, "val" = valdata, "tst" = tstdata)  # Agrupa los conjuntos en una lista
+
+  return(mylist)  # Devuelve la lista

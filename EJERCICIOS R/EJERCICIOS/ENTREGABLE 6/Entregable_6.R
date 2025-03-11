@@ -1,0 +1,221 @@
+#CARGA Y PREPARACION DE LOS DATOS
+
+#Obtengo el archivo y lo muestro en consola
+df = read.csv("C:/Users/User/Desktop/EJERCICIOS R/EJERCICIOS/ENTREGABLE 3/insurance2.csv", sep=",", header = TRUE)
+head(df)
+
+#Se muestran cuantas filas y columnas hay
+dim(df)
+
+# Janitor sirve para limpiar los nombres de las columnas y contar los valores faltantes en ella
+library(janitor) 
+
+# Garantizo que los nombres de las columnas sean solo letras, numeros o guiones bajos
+df = clean_names(df)
+head(df)
+
+# Cambio los espacios por guines bajos
+df$smoker = gsub(" ", "_", df$smoker)
+df$region = gsub(" ", "_", df$region)
+df$sex = gsub(" ", "_", df$sex)
+head(df)
+
+
+#ANALISIS DE VARIABLE OBJETIVO
+
+# Muestro el histograma con base en la variable objetivo
+hist(df$charges, freq = TRUE)
+
+# Muestro el histograma con base en la variable objetivo pero en escala logaritmica
+log_price = log1p(df$charges)
+hist(log_price, freq = TRUE)
+
+
+# VALORES FALTANTES
+sapply(df, function(x) sum(is.na(x)))
+
+plot(df$age, df$charges, main="Gráfico de Dispersión",
+     xlab="Variable X", ylab="Variable Y", pch=19)
+
+
+correlacion <- cor(df$age, df$charges)
+print(correlacion)
+
+
+# DIVISIÓN DE DATOS
+
+set.seed(1234)
+trvaltest <- function(dat,prop = c(0.6,0.2,0.2)){
+  nrw = nrow(dat)
+  trnr = as.integer(nrw *prop[1])
+  vlnr = as.integer(nrw*prop[2])
+  set.seed(123)
+  trni = sample(1:nrow(dat),trnr)
+  trndata = dat[trni,]
+  rmng = dat[-trni,]
+  vlni = sample(1:nrow(rmng),vlnr)
+  valdata = rmng[vlni,]
+  tstdata = rmng[-vlni,]
+  mylist = list("trn" = trndata,"val"= valdata,"tst" = tstdata)
+  return(mylist)
+}
+
+outdata = trvaltest(df,prop = c(0.6,0.2,0.2))
+df_train = outdata$trn; df_val = outdata$val; df_test = outdata$tst
+head(df_train)
+
+library(dplyr)
+
+#Guardo los valores originales
+y_train_orig =  select(df_train, charges)
+y_val_orig = select(df_val, charges)
+y_test_orig = select(df_test, charges)
+
+#Transformo los valores a escala logaritmica
+y_train = log1p(y_train_orig)
+y_val = log1p(y_val_orig)
+y_test = log1p(y_test_orig)
+
+#Eliminación de la variable objetivo
+df_train <- df_train[ ,!colnames(df_train)=="charges"]
+df_val <- df_val[ ,!colnames(df_val)=="charges"]
+df_test <- df_test[ ,!colnames(df_test)=="charges"]
+
+
+# MODELADO DE LOS DATOS con regularizacion
+
+train_linear_regression_reg = function(X, y, r=0.01){
+  ones = as.vector(rep(1, dim(X)[1]))
+  X = cbind(ones, X)
+  
+  XTX = t(X) %*% X
+  n = dim(XTX)[1]
+  diag_mat = diag(n)
+  reg = r * diag_mat
+  XTX = XTX + reg
+  
+  XTX_inv = solve(XTX)
+  w1 = as.matrix(XTX_inv %*% t(X)) 
+  w =w1 %*% y
+  
+  return(w)
+}
+
+
+# RESULTADOS
+
+
+# RMSE
+
+rmse = function(y, y_pred){
+  error = y_pred - y
+  mse = mean((error ** 2))
+  r = sqrt(mse)
+  r
+}
+
+
+# Categoricas
+
+library(mltools)
+library(data.table)
+
+
+prepare_X = function(df) {
+  # Seleccionar características numéricas
+  features = select(df, age, bmi)
+  
+  #SMOKER
+  
+  # Aplicar one hot encoding a las variables categóricas
+  one_hot_smoker <- model.matrix(~ smoker - 1, data = df)
+  features1 = cbind(features, one_hot_smoker)
+  
+  #REGION
+  
+  # Aplicar one hot encoding a la variable 'region'
+  one_hot_region <- model.matrix(~ region - 1, data = df)
+  features2 = cbind(features1, one_hot_region)
+  
+  #SEX
+  
+  # Aplicar one hot encoding a la variable 'region'
+  one_hot_sex <- model.matrix(~ sex - 1, data = df)
+  features3 = cbind(features2, one_hot_sex)
+  
+  # Reemplazar NA por 0
+  features3[is.na(features3)] <- 0
+  
+  # Convertir a matriz
+  X = as.matrix(features3)
+  return(X)
+}
+
+
+# Entrenamos
+X_train = prepare_X(df_train)
+head(X_train) 
+
+head(y_train)
+
+# Verifico que y_train sea un vector numérico con la columna charges
+y_train = log1p(y_train_orig$charges)  
+
+head(y_train)
+
+
+# Entrenamiento del modelo
+b = train_linear_regression_reg(X_train, y_train, r = 0.01)
+
+# Predicciones
+y_pred = b[1] + X_train %*% b[-1]
+
+# Crear el histograma para y_train
+hist(y_train, col='red', xlim=c(min(c(y_train, y_pred)), max(c(y_train, y_pred))), 
+     main='Distribucion Real vs Predicción', 
+     xlab='Log(Charges + 1)', ylab='Frecuencia', 
+     breaks=20, freq=TRUE)
+
+# Agregar el histograma para y_pred
+hist(y_pred, col='blue', add=TRUE, breaks=20, freq=TRUE)
+
+
+# Calcular RMSE
+print(paste('Entrenamiento:', rmse(y_train, y_pred)))
+
+# Validación
+X_val = prepare_X(df_val) # Matriz
+y_val = log1p(y_val_orig$charges) # Vector
+y_pred_val = b[1] + X_val %*% b[-1]
+
+# Calcular RMSE
+print(paste('Validación:', rmse(y_val, y_pred_val)))
+
+
+# PRUEBA
+
+# Seleccionar una fila para la prueba
+fila = 3
+
+# Las variables categoricas de df_test las transformo en factores
+df_test$smoker <- as.factor(df_test$smoker)
+df_test$region <- as.factor(df_test$region)
+df_test$sex <- as.factor(df_test$sex)
+
+ad = df_test[fila,]
+
+fila_orig = rownames(df_test)[fila]
+
+print(paste("Seleccionaste la fila: ",fila,", Siendo su indice en el df original: ",fila_orig))
+
+X_test = prepare_X(as.data.frame(ad))
+y_pred = b[1] + X_test %*% b[-1]
+suggestion = expm1(y_pred)
+
+print(paste("Predicción del costo medico:",suggestion,"$"))
+print(paste("Costo real: ",df[fila_orig,7],"$"))
+
+
+
+
+
